@@ -53,11 +53,11 @@ on:
         type: string
 
 env:
-  # Base ACR_LOGIN_SERVER will be dynamically set in first step
-  IMAGE_NAME: ${{ github.event.inputs.image_name || 'webapp' }}
-  AKS_CLUSTER_NAME: ${{ github.event.inputs.aks_cluster_name || 'my-aks-cluster' }}
-  AKS_RESOURCE_GROUP: ${{ github.event.inputs.aks_resource_group || 'my-resource-group' }}
-  MANIFEST_PATH: ${{ github.event.inputs.manifest_path || 'k8s/deployment.yaml' }}
+  # These will be overridden by step outputs
+  IMAGE_NAME: webapp
+  AKS_CLUSTER_NAME: my-aks-cluster
+  AKS_RESOURCE_GROUP: my-resource-group
+  MANIFEST_PATH: k8s/deployment.yaml
 
 jobs:
   build-and-deploy:
@@ -68,6 +68,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container  # ✅ Force container driver
 
       - name: Set dynamic environment variables
         id: config
@@ -90,9 +96,6 @@ jobs:
           echo "AKS_RESOURCE_GROUP: ${{ steps.config.outputs.aks_resource_group }}"
           echo "MANIFEST_PATH: ${{ steps.config.outputs.manifest_path }}"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Log in to Azure Container Registry
         uses: azure/docker-login@v1
         with:
@@ -113,6 +116,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
+          builder: ${{ steps.buildx.outputs.name }}  # ✅ Force SAME builder
           context: .
           file: ./Dockerfile
           push: true
